@@ -1,79 +1,100 @@
 import { useEffect, useRef } from "react";
 
 export default function GalaxyBackground() {
-  const canvasRef = useRef();
+  const ref = useRef();
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    let animId, W, H;
-    const LAYERS = [
-      { count:340, speed:0.005, minR:0.15, maxR:0.6,  baseAlpha:0.45 },
-      { count:180, speed:0.010, minR:0.35, maxR:1.0,  baseAlpha:0.65 },
-      { count: 60, speed:0.018, minR:0.6,  maxR:1.5,  baseAlpha:0.85 },
-      { count: 14, speed:0.026, minR:1.0,  maxR:2.0,  baseAlpha:1.00 },
-    ];
-    const NEBULAE = [
-      { rx:0.18, ry:0.20, rw:220, rh:130, col:"rgba(70,35,110,0.042)" },
-      { rx:0.76, ry:0.62, rw:260, rh:150, col:"rgba(25,55,95,0.038)"  },
-      { rx:0.48, ry:0.88, rw:320, rh:110, col:"rgba(90,45,25,0.030)"  },
-      { rx:0.88, ry:0.14, rw:170, rh:190, col:"rgba(35,70,70,0.038)"  },
-    ];
-    let stars = [];
-    const rand = (a, b) => a + Math.random() * (b - a);
-    const build = () => {
-      stars = [];
-      LAYERS.forEach((L, li) => {
-        for (let i = 0; i < L.count; i++) {
-          stars.push({ x:Math.random()*W, y:Math.random()*H, r:rand(L.minR,L.maxR), speed:L.speed, baseAlpha:L.baseAlpha, tOff:Math.random()*Math.PI*2, tSpd:rand(0.003,0.016), gold:li>=2&&Math.random()<0.16, layer:li });
-        }
-      });
+    const c = ref.current; if (!c) return;
+    const ctx = c.getContext("2d");
+    let raf, t = 0;
+    const stars = Array.from({ length: 520 }, () => ({
+      x: Math.random(), y: Math.random(),
+      r: Math.random() * 1.6 + 0.3,
+      speed: Math.random() * 0.00008 + 0.00002,
+      twinkle: Math.random() * Math.PI * 2,
+      gold: Math.random() < 0.06,
+      layer: Math.floor(Math.random() * 3),
+    }));
+    const shoots = [];
+    const addShoot = () => {
+      shoots.push({ x: Math.random(), y: Math.random() * 0.5, len: 0.08 + Math.random() * 0.1, life: 1, angle: Math.PI / 6 + Math.random() * 0.4 });
     };
-    const resize = () => { W=canvas.width=window.innerWidth; H=canvas.height=window.innerHeight; build(); };
+    let shootTimer = setInterval(addShoot, 4200);
+
+    const draw = () => {
+      const W = c.width, H = c.height;
+      ctx.clearRect(0, 0, W, H);
+      // Deep space gradient
+      const g = ctx.createRadialGradient(W * 0.5, H * 0.38, 0, W * 0.5, H * 0.38, W * 0.72);
+      g.addColorStop(0, "#0e0b1a");
+      g.addColorStop(0.6, "#07060f");
+      g.addColorStop(1, "#04040a");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+
+      // Nebula wisps
+      [[0.3, 0.2, 0.28, "rgba(80,40,120,0.045)"], [0.7, 0.6, 0.22, "rgba(40,80,120,0.04)"], [0.5, 0.8, 0.18, "rgba(120,60,40,0.035)"]].forEach(([rx, ry, rr, col]) => {
+        const ng = ctx.createRadialGradient(W * rx, H * ry, 0, W * rx, H * ry, W * rr);
+        ng.addColorStop(0, col); ng.addColorStop(1, "transparent");
+        ctx.fillStyle = ng; ctx.fillRect(0, 0, W, H);
+      });
+
+      // Stars
+      stars.forEach(s => {
+        const px = (s.x + s.layer * 0.001 * t) % 1;
+        const py = s.y;
+        const twink = 0.5 + 0.5 * Math.sin(t * 0.8 + s.twinkle);
+        ctx.beginPath();
+        ctx.arc(px * W, py * H, s.r * (s.gold ? 1.4 : 1), 0, Math.PI * 2);
+        if (s.gold) {
+          ctx.fillStyle = `rgba(201,169,110,${0.55 + 0.45 * twink})`;
+          if (s.r > 1.2) {
+            ctx.shadowBlur = 8; ctx.shadowColor = "#c9a96e88";
+          }
+        } else {
+          ctx.fillStyle = `rgba(220,218,240,${0.25 + 0.55 * twink})`;
+          ctx.shadowBlur = 0;
+        }
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      });
+
+      // Shooting stars
+      shoots.forEach((sh, i) => {
+        sh.life -= 0.016;
+        if (sh.life <= 0) { shoots.splice(i, 1); return; }
+        const sx = sh.x * W, sy = sh.y * H;
+        const ex = sx + Math.cos(sh.angle) * sh.len * W;
+        const ey = sy + Math.sin(sh.angle) * sh.len * H;
+        const sg = ctx.createLinearGradient(sx, sy, ex, ey);
+        sg.addColorStop(0, `rgba(255,255,255,0)`);
+        sg.addColorStop(0.5, `rgba(255,255,255,${sh.life * 0.8})`);
+        sg.addColorStop(1, `rgba(201,169,110,0)`);
+        ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey);
+        ctx.strokeStyle = sg; ctx.lineWidth = 1.2; ctx.stroke();
+      });
+
+      t += 0.4;
+      raf = requestAnimationFrame(draw);
+    };
+
+    const resize = () => {
+      c.width  = window.innerWidth;
+      c.height = window.innerHeight;
+    };
     resize();
     window.addEventListener("resize", resize);
-    let t = 0;
-    const frame = () => {
-      t += 0.010;
-      const bg = ctx.createRadialGradient(W*.5,H*.38,0,W*.5,H*.38,Math.max(W,H)*.92);
-      bg.addColorStop(0,"#0b0916"); bg.addColorStop(0.5,"#06050f"); bg.addColorStop(1,"#030308");
-      ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
-      NEBULAE.forEach(n => {
-        const px=n.rx*W, py=n.ry*H;
-        ctx.save(); ctx.scale(1,n.rh/n.rw);
-        const g=ctx.createRadialGradient(px,py*(n.rw/n.rh),0,px,py*(n.rw/n.rh),n.rw);
-        g.addColorStop(0,n.col); g.addColorStop(1,"rgba(0,0,0,0)");
-        ctx.fillStyle=g; ctx.beginPath(); ctx.arc(px,py*(n.rw/n.rh),n.rw,0,Math.PI*2); ctx.fill(); ctx.restore();
-      });
-      stars.forEach(s => {
-        s.y+=s.speed; if(s.y>H+3){s.y=-3;s.x=Math.random()*W;}
-        const twinkle=0.52+0.48*Math.sin(t*s.tSpd*55+s.tOff);
-        const a=s.baseAlpha*twinkle;
-        ctx.save(); ctx.globalAlpha=a;
-        if(s.gold){
-          const glow=ctx.createRadialGradient(s.x,s.y,0,s.x,s.y,s.r*5);
-          glow.addColorStop(0,`rgba(220,185,105,${a*.55})`); glow.addColorStop(0.5,`rgba(200,165,80,${a*.12})`); glow.addColorStop(1,"rgba(0,0,0,0)");
-          ctx.fillStyle=glow; ctx.beginPath(); ctx.arc(s.x,s.y,s.r*5,0,Math.PI*2); ctx.fill();
-          ctx.fillStyle=`rgba(255,242,195,${a})`;
-        } else { ctx.fillStyle=`rgba(218,225,255,${a})`; }
-        ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2); ctx.fill();
-        if(s.layer===3){
-          ctx.globalAlpha=a*0.22; ctx.strokeStyle=s.gold?"rgba(255,215,130,0.7)":"rgba(195,215,255,0.6)"; ctx.lineWidth=0.5;
-          const spk=s.r*7; ctx.beginPath(); ctx.moveTo(s.x-spk,s.y); ctx.lineTo(s.x+spk,s.y); ctx.moveTo(s.x,s.y-spk); ctx.lineTo(s.x,s.y+spk); ctx.stroke();
-        }
-        ctx.restore();
-      });
-      if(Math.random()<0.001){
-        const sx=Math.random()*W*.8,sy=Math.random()*H*.45,len=rand(55,130);
-        const gr=ctx.createLinearGradient(sx,sy,sx+len*.7,sy+len*.4);
-        gr.addColorStop(0,"rgba(255,255,255,0)"); gr.addColorStop(.5,"rgba(255,248,225,.65)"); gr.addColorStop(1,"rgba(255,255,255,0)");
-        ctx.save(); ctx.globalAlpha=.65; ctx.strokeStyle=gr; ctx.lineWidth=1;
-        ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(sx+len*.7,sy+len*.4); ctx.stroke(); ctx.restore();
-      }
-      animId=requestAnimationFrame(frame);
+    draw();
+    return () => {
+      cancelAnimationFrame(raf);
+      clearInterval(shootTimer);
+      window.removeEventListener("resize", resize);
     };
-    frame();
-    return () => { cancelAnimationFrame(animId); window.removeEventListener("resize",resize); };
   }, []);
-  return <canvas ref={canvasRef} style={{position:"fixed",inset:0,zIndex:0,pointerEvents:"none",display:"block"}} />;
+
+  return (
+    <canvas ref={ref} style={{
+      position: "fixed", inset: 0, zIndex: 0,
+      width: "100%", height: "100%", pointerEvents: "none",
+    }} />
+  );
 }
