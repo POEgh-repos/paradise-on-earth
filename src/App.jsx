@@ -376,38 +376,40 @@ export default function App() {
 
   // ── Firebase auth listener ──────────────────────────────────────────────────
   useEffect(()=>{
-    // Handle redirect result from mobile Google login
-    getRedirectResult(auth).then(async result => {
-      if (result?.user) {
-        const fbUser = result.user;
-        await createUserProfile(fbUser.uid, {
-          name: fbUser.displayName,
-          email: fbUser.email,
-          avatar: fbUser.photoURL || "◆",
-          provider: "google",
-        });
-      }
-    }).catch(()=>{});
-
     const unsub = onAuthStateChanged(auth, async (fbUser)=>{
       if(fbUser){
         const profile = await createUserProfile(fbUser.uid, {
           name: fbUser.displayName,
           email: fbUser.email,
+          photoURL: fbUser.photoURL || null,
           avatar: fbUser.photoURL || "◆",
           provider: "google",
         });
-        const isAdm = fbUser.email === "admin@paradiseonearth.io" || false;
-        setUser({ uid:fbUser.uid, name:fbUser.displayName, email:fbUser.email,
-          photoURL:fbUser.photoURL, ...profile });
-        setIsAdmin(isAdm);
+        setUser({
+          uid: fbUser.uid,
+          name: fbUser.displayName,
+          email: fbUser.email,
+          photoURL: fbUser.photoURL,
+          wallet: profile?.wallet || "0x" + fbUser.uid.slice(0,8) + "…",
+          verified: profile?.verified || false,
+          flagged: profile?.flagged || false,
+          ownedNFTs: profile?.ownedNFTs || [],
+          profile: profile?.profile || {
+            displayName: fbUser.displayName,
+            avatar: fbUser.photoURL
+              ? { type:"photo", value:fbUser.photoURL }
+              : { type:"symbol", value:"◆" },
+          },
+        });
+        setPage(p => p === "auth" || p === "loading" ? "feed" : p);
+        showToast(`Welcome, ${fbUser.displayName?.split(" ")[0]} 👑`);
       } else {
         setUser(null); setIsAdmin(false);
       }
       setAuthLoading(false);
     });
     return unsub;
-  },[]);
+  },[showToast]);
 
   // ── Firebase real-time posts ────────────────────────────────────────────────
   useEffect(()=>{
@@ -427,15 +429,9 @@ export default function App() {
 
   // ── Auth handlers ───────────────────────────────────────────────────────────
   const handleGoogleLogin = useCallback(async ()=>{
-    try {
-      setPage("loading");
-      await signInWithGoogle();
-      // Page will redirect to Google — no code runs after this
-    } catch(e){
-      console.error(e);
-      setPage("auth");
-    }
-  },[]);
+    try { await signInWithGoogle(); }
+    catch(e){ showToast("Could not open Google. Try again.","error"); }
+  },[showToast]);
 
   const handleAdminAuth = useCallback(()=>{
     setIsAdmin(true); setUser({...ADMIN_PROFILE}); setPage("feed");
