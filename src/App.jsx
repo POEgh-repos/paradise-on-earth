@@ -427,9 +427,15 @@ export default function App() {
 
   // ── Auth handlers ───────────────────────────────────────────────────────────
   const handleGoogleLogin = useCallback(async ()=>{
-    try { await signInWithGoogle(); setPage("feed"); }
-    catch(e){ showToast("Sign in failed. Try again.","error"); }
-  },[showToast]);
+    try {
+      setPage("loading");
+      await signInWithGoogle();
+      // Page will redirect to Google — no code runs after this
+    } catch(e){
+      console.error(e);
+      setPage("auth");
+    }
+  },[]);
 
   const handleAdminAuth = useCallback(()=>{
     setIsAdmin(true); setUser({...ADMIN_PROFILE}); setPage("feed");

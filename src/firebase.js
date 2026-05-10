@@ -17,19 +17,11 @@ export const auth    = getAuth(app);
 export const db      = getFirestore(app);
 export const storage = getStorage(app);
 
-// ── Auth — uses redirect on mobile, popup on desktop ─────────────────────────
+// ── Auth — redirect on all devices (works on Safari, Chrome, all mobile) ──────
 const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: "select_account" });
 
-const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
-export const signInWithGoogle = async () => {
-  if (isMobile) {
-    await signInWithRedirect(auth, googleProvider);
-  } else {
-    return signInWithPopup(auth, googleProvider);
-  }
-};
-
+export const signInWithGoogle = () => signInWithRedirect(auth, googleProvider);
 export { getRedirectResult };
 export const logOut = () => signOut(auth);
 
