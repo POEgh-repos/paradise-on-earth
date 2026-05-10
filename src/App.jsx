@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, Suspense, lazy } from "react";
+import React, { useState, useCallback, useEffect, useRef, Suspense, lazy } from "react";
 import { T, GLOBAL_CSS, Btn, Divider, Tag, VerifiedCrown, FlagBadge, Toast, AnimatedAvatar } from "./tokens";
 import GalaxyBackground from "./GalaxyBackground";
 import {
@@ -14,6 +14,37 @@ const ProfilePage    = lazy(() => import("./ProfilePage"));
 const SocialFeedPage = lazy(() => import("./SocialFeed"));
 const AdminPanel     = lazy(() => import("./AdminPanel"));
 
+
+// ── Error Boundary — catches any crash and shows recovery UI ─────────────────
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { hasError: false, error: null }; }
+  static getDerivedStateFromError(error) { return { hasError: true, error }; }
+  componentDidCatch(error, info) { console.error("PARADISE crash:", error, info); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{minHeight:"100vh",background:"#06060e",display:"flex",alignItems:"center",justifyContent:"center",padding:24,flexDirection:"column",gap:16}}>
+          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:48,fontWeight:700,letterSpacing:"0.2em",color:"#f2ede7"}}>PARADISE</div>
+          <div style={{fontFamily:"'Cormorant Garamond',serif",fontStyle:"italic",fontSize:18,color:"#c9a96e",letterSpacing:"0.2em"}}>on Earth</div>
+          <div style={{fontFamily:"monospace",fontSize:12,color:"#7a7690",marginTop:16,textAlign:"center",maxWidth:320,lineHeight:1.6}}>
+            Something went wrong loading. Please refresh the page.
+          </div>
+          <button onClick={()=>window.location.reload()} style={{background:"#c9a96e",border:"none",borderRadius:8,padding:"12px 28px",color:"#08080e",fontFamily:"sans-serif",fontSize:13,fontWeight:700,cursor:"pointer",marginTop:8,letterSpacing:"0.1em"}}>
+            REFRESH
+          </button>
+          {process.env.NODE_ENV === "development" && (
+            <details style={{marginTop:16,maxWidth:400,color:"#c46a6a",fontFamily:"monospace",fontSize:11}}>
+              <summary style={{cursor:"pointer",color:"#7a7690"}}>Error details</summary>
+              <pre style={{marginTop:8,whiteSpace:"pre-wrap"}}>{this.state.error?.toString()}</pre>
+            </details>
+          )}
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // ── Admin identity ─────────────────────────────────────────────────────────
 export const ADMIN_PROFILE = {
   uid:"ADMIN", name:"GOD🤎", email:"admin@paradise.io",
@@ -24,7 +55,7 @@ export const ADMIN_PROFILE = {
 };
 
 // ── NO seed data — starts empty, Firestore is the source of truth ──────────
-// No sample data — all data comes from Firestore
+// No sample data — starts empty, Firestore populates
 
 // ── Page transition ─────────────────────────────────────────────────────────
 function PageTransition({ children, pageKey }) {
@@ -685,8 +716,8 @@ export default function App() {
   const [authLoading,setAuthLoading] = useState(true);
   const [selectedNFT,setSelNFT]      = useState(null);
   const [selectedColl,setSelColl]    = useState(null);
-  const [collections,setCollections] = useState(EMPTY_COLLECTIONS);
-  const [posts,setPosts]             = useState(EMPTY_POSTS);
+  const [collections,setCollections] = useState([]);
+  const [posts,setPosts]             = useState([]);
   const [flaggedUsers,setFlagged]    = useState({});
   const [verifiedUsers,setVerified]  = useState({});
   const [toast,setToast]             = useState(null);
