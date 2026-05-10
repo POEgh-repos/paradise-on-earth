@@ -5,7 +5,7 @@ import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBkq1V_fyNUwcaL07MZ3IMdOUwt0mAShH0",
-  authDomain: "paradise-on-earth-db8a3.firebaseapp.com",
+  authDomain: "paradise-on-earth.vercel.app",
   projectId: "paradise-on-earth-db8a3",
   storageBucket: "paradise-on-earth-db8a3.firebasestorage.app",
   messagingSenderId: "604683252633",
