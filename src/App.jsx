@@ -1,6 +1,8 @@
-import { useState, useCallback, Suspense, lazy } from "react";
+import { useState, useCallback, useEffect, Suspense, lazy } from "react";
 import { T, GLOBAL_CSS, Btn, Divider, Tag, VerifiedCrown, FlagBadge, Toast, AnimatedAvatar } from "./tokens";
 import GalaxyBackground from "./GalaxyBackground";
+import { auth, signInWithGoogle, logOut, createUserProfile, getUserProfile, createPost, subscribeToPosts, likePost, pinPost, blockPost, deletePost as fbDeletePost, subscribeToCollections, saveCollection } from "./firebase";
+import { onAuthStateChanged } from "firebase/auth";
 
 const ProfilePage    = lazy(() => import("./ProfilePage"));
 const SocialFeedPage = lazy(() => import("./SocialFeed"));
@@ -135,11 +137,11 @@ function Nav({ page, setPage, user, isAdmin }) {
 }
 
 // ── Auth ───────────────────────────────────────────────────────────────────────
-function AuthPage({ onAuth, onAdminAuth }) {
+function AuthPage({ onGoogleLogin, onAdminAuth }) {
   const [loading,setLoading]=useState(false);
   const [adminMode,setAdminMode]=useState(false);
   const [adminPass,setAdminPass]=useState("");
-  const doAuth=p=>{ setLoading(true); setTimeout(()=>onAuth({name:p==="google"?"Kofi Mensah":"Ama Asante",avatar:p==="google"?"◆":"◇",wallet:"0x"+Math.random().toString(16).slice(2,10)+"…3f2a",provider:p,ownedNFTs:[102],verified:false,flagged:false,profile:{avatar:{type:"zodiac",value:"Leo",symbol:"♌"},zodiac:{sign:"Leo",symbol:"♌"}}}),1600); };
+  const doAuth=async()=>{ setLoading(true); try{ await onGoogleLogin(); }catch(e){ setLoading(false); } };
   const doAdmin=()=>{ if(adminPass==="admin123")onAdminAuth();else alert("Incorrect password."); };
   return (
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:"24px 16px",animation:`fadeUp 0.34s ${T.smooth} both`}}>
@@ -159,7 +161,7 @@ function AuthPage({ onAuth, onAdminAuth }) {
             ):(
               <div style={{display:"flex",flexDirection:"column",gap:10}}>
                 {[["google","◉","Continue with Google"],["apple","◈","Continue with Apple"]].map(([p,icon,label])=>(
-                  <button key={p} onClick={()=>doAuth(p)} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12,background:"rgba(255,255,255,0.04)",border:`1px solid ${T.border}`,borderRadius:8,padding:"13px 20px",color:T.white,fontFamily:T.sans,fontSize:14,fontWeight:600,letterSpacing:1,transition:`all 0.18s`,cursor:"pointer"}}
+                  <button key={p} onClick={doAuth} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12,background:"rgba(255,255,255,0.04)",border:`1px solid ${T.border}`,borderRadius:8,padding:"13px 20px",color:T.white,fontFamily:T.sans,fontSize:14,fontWeight:600,letterSpacing:1,transition:`all 0.18s`,cursor:"pointer"}}
                     onMouseEnter={e=>{e.currentTarget.style.borderColor=T.gold;e.currentTarget.style.background=T.goldSoft}}
                     onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.background="rgba(255,255,255,0.04)"}}>
                     <span style={{color:T.gold,fontFamily:T.font,fontSize:20}}>{icon}</span>{label}
@@ -356,37 +358,137 @@ function WalletPage({ user, collections, onSelectNFT }) {
 
 // ── Main App ───────────────────────────────────────────────────────────────────
 export default function App() {
-  const [loaded,setLoaded]               = useState(false);
-  const [page,setPage]                   = useState("feed");
-  const [user,setUser]                   = useState(null);
-  const [isAdmin,setIsAdmin]             = useState(false);
-  const [selectedNFT,setSelectedNFT]     = useState(null);
-  const [selectedColl,setSelectedColl]   = useState(null);
-  const [collections,setCollections]     = useState(SEED_COLLECTIONS);
-  const [posts,setPosts]                 = useState(SEED_POSTS);
-  const [flaggedUsers,setFlaggedUsers]   = useState({});
-  const [verifiedUsers,setVerifiedUsers] = useState({"abena.k":true,"ama.s":true});
-  const [blockedPosts,setBlockedPosts]   = useState(new Set());
-  const [toast,setToast]                 = useState(null);
+  const [loaded,setLoaded]             = useState(false);
+  const [page,setPage]                 = useState("feed");
+  const [user,setUser]                 = useState(null);
+  const [isAdmin,setIsAdmin]           = useState(false);
+  const [authLoading,setAuthLoading]   = useState(true);
+  const [selectedNFT,setSelectedNFT]   = useState(null);
+  const [selectedColl,setSelectedColl] = useState(null);
+  const [collections,setCollections]   = useState(SEED_COLLECTIONS);
+  const [posts,setPosts]               = useState(SEED_POSTS);
+  const [flaggedUsers,setFlaggedUsers] = useState({});
+  const [verifiedUsers,setVerifiedUsers]=useState({"abena.k":true,"ama.s":true});
+  const [toast,setToast]               = useState(null);
 
   const showToast=useCallback((msg,type="success")=>{setToast({msg,type});setTimeout(()=>setToast(null),2600);},[]);
-  const handleAuth      =useCallback(u=>{setUser(u);setPage("feed");},[]);
-  const handleAdminAuth =useCallback(()=>{setIsAdmin(true);setUser({...ADMIN_PROFILE});setPage("feed");},[]);
-  const handleLogout    =useCallback(()=>{setUser(null);setIsAdmin(false);setPage("feed");showToast("Signed out");},[showToast]);
-  const handleBuy       =useCallback(nft=>setUser(p=>({...p,ownedNFTs:[...(p.ownedNFTs||[]),nft.id]})),[]);
-  const handleSelectNFT =useCallback((nft,col)=>{setSelectedNFT(nft);setSelectedColl(col);},[]);
-  const handleUpdateUser=useCallback(u=>setUser(u),[]);
-  const handlePost      =useCallback(p=>setPosts(prev=>[p,...prev]),[]);
-  const handleLike      =useCallback(id=>setPosts(prev=>prev.map(p=>p.id===id?{...p,likedByMe:!p.likedByMe}:p)),[]);
-  const handleBlockPost =useCallback(id=>setBlockedPosts(prev=>{const n=new Set(prev);n.has(id)?n.delete(id):n.add(id);return n;}),[]);
-  const handleFlagUser  =useCallback(u=>setFlaggedUsers(prev=>{const n={...prev};n[u]?delete n[u]:(n[u]={at:new Date().toLocaleString()});return n;}),[]);
-  const handleVerify    =useCallback(u=>setVerifiedUsers(prev=>({...prev,[u]:!prev[u]})),[]);
-  const handlePin       =useCallback(id=>setPosts(prev=>prev.map(p=>p.id===id?{...p,pinned:!p.pinned}:p)),[]);
-  const handleDeletePost=useCallback(id=>setPosts(prev=>prev.filter(p=>p.id!==id)),[]);
-  const handleWarn      =useCallback((u)=>showToast(`⚠️ Warning sent to @${u}`),[showToast]);
 
-  const enrichedPosts=posts.map(p=>({...p,blocked:blockedPosts.has(p.id),verified:!!verifiedUsers[p.username],flagged:!!flaggedUsers[p.username],flaggedAt:flaggedUsers[p.username]?.at})).sort((a,b)=>(b.pinned?1:0)-(a.pinned?1:0));
-  const modProps={onBlockPost:handleBlockPost,onFlagUser:handleFlagUser,onVerify:handleVerify,onPin:handlePin,onDeletePost:handleDeletePost,onWarn:handleWarn,flaggedUsers,verifiedUsers,blockedPosts};
+  // ── Firebase auth listener ──────────────────────────────────────────────────
+  useEffect(()=>{
+    const unsub = onAuthStateChanged(auth, async (fbUser)=>{
+      if(fbUser){
+        const profile = await createUserProfile(fbUser.uid, {
+          name: fbUser.displayName,
+          email: fbUser.email,
+          avatar: fbUser.photoURL || "◆",
+          provider: "google",
+        });
+        const isAdm = fbUser.email === "admin@paradiseonearth.io" || false;
+        setUser({ uid:fbUser.uid, name:fbUser.displayName, email:fbUser.email,
+          photoURL:fbUser.photoURL, ...profile });
+        setIsAdmin(isAdm);
+      } else {
+        setUser(null); setIsAdmin(false);
+      }
+      setAuthLoading(false);
+    });
+    return unsub;
+  },[]);
+
+  // ── Firebase real-time posts ────────────────────────────────────────────────
+  useEffect(()=>{
+    const unsub = subscribeToPosts(livePosts=>{
+      if(livePosts.length > 0) setPosts(livePosts);
+    });
+    return unsub;
+  },[]);
+
+  // ── Firebase real-time collections ─────────────────────────────────────────
+  useEffect(()=>{
+    const unsub = subscribeToCollections(liveCols=>{
+      if(liveCols.length > 0) setCollections(liveCols);
+    });
+    return unsub;
+  },[]);
+
+  // ── Auth handlers ───────────────────────────────────────────────────────────
+  const handleGoogleLogin = useCallback(async ()=>{
+    try { await signInWithGoogle(); setPage("feed"); }
+    catch(e){ showToast("Sign in failed. Try again.","error"); }
+  },[showToast]);
+
+  const handleAdminAuth = useCallback(()=>{
+    setIsAdmin(true); setUser({...ADMIN_PROFILE}); setPage("feed");
+  },[]);
+
+  const handleLogout = useCallback(async ()=>{
+    await logOut(); setUser(null); setIsAdmin(false); setPage("feed"); showToast("Signed out");
+  },[showToast]);
+
+  // ── Data handlers ───────────────────────────────────────────────────────────
+  const handleBuy        = useCallback(nft=>setUser(p=>({...p,ownedNFTs:[...(p.ownedNFTs||[]),nft.id]})),[]);
+  const handleSelectNFT  = useCallback((nft,col)=>{setSelectedNFT(nft);setSelectedColl(col);},[]);
+  const handleUpdateUser = useCallback(async u=>{
+    setUser(u);
+    if(u.uid) await updateUserProfile(u.uid, u.profile||{});
+  },[]);
+
+  const handlePost = useCallback(async p=>{
+    try {
+      await createPost({ ...p, uid:user?.uid||"anon" });
+    } catch(e){
+      setPosts(prev=>[p,...prev]); // fallback to local
+    }
+  },[user]);
+
+  const handleLike = useCallback(async id=>{
+    try { await likePost(id, user?.uid||"anon"); }
+    catch(e){ setPosts(prev=>prev.map(p=>p.id===id?{...p,likedByMe:!p.likedByMe}:p)); }
+  },[user]);
+
+  // ── Mod handlers ────────────────────────────────────────────────────────────
+  const handleBlockPost  = useCallback(async id=>{
+    const p = posts.find(x=>x.id===id);
+    try { await blockPost(id, !p?.blocked); } catch(e){}
+  },[posts]);
+
+  const handleFlagUser   = useCallback(async username=>{
+    if(flaggedUsers[username]){
+      setFlaggedUsers(prev=>{const n={...prev};delete n[username];return n;});
+      try{ await unflagUser(username); }catch(e){}
+    } else {
+      const at = new Date().toLocaleString();
+      setFlaggedUsers(prev=>({...prev,[username]:{at}}));
+      try{ await flagUser(username,{at,flaggedBy:"admin"}); }catch(e){}
+    }
+  },[flaggedUsers]);
+
+  const handleVerify     = useCallback(async username=>{
+    setVerifiedUsers(prev=>({...prev,[username]:!prev[username]}));
+    try{ await verifyUser(username, !verifiedUsers[username]); }catch(e){}
+  },[verifiedUsers]);
+
+  const handlePin        = useCallback(async id=>{
+    const p = posts.find(x=>x.id===id);
+    try{ await pinPost(id, !p?.pinned); }
+    catch(e){ setPosts(prev=>prev.map(p=>p.id===id?{...p,pinned:!p.pinned}:p)); }
+  },[posts]);
+
+  const handleDeletePost = useCallback(async id=>{
+    try{ await fbDeletePost(id); }
+    catch(e){ setPosts(prev=>prev.filter(p=>p.id!==id)); }
+  },[]);
+
+  const handleWarn = useCallback(u=>showToast(`⚠️ Warning sent to @${u}`),[showToast]);
+
+  const enrichedPosts=posts.map(p=>({...p,
+    verified:!!verifiedUsers[p.username],
+    flagged:!!flaggedUsers[p.username],
+    flaggedAt:flaggedUsers[p.username]?.at,
+    likedByMe:p.likedBy?.includes(user?.uid),
+  })).sort((a,b)=>(b.pinned?1:0)-(a.pinned?1:0));
+
+  const modProps={onBlockPost:handleBlockPost,onFlagUser:handleFlagUser,onVerify:handleVerify,onPin:handlePin,onDeletePost:handleDeletePost,onWarn:handleWarn,flaggedUsers,verifiedUsers};
   const showHeader=!["auth","admin","profile"].includes(page);
   const pageMap={feed:"Feed",explore:"Explore",creators:"Creators",wallet:"Collection",profile:"Profile",admin:"Admin"};
 
@@ -399,22 +501,30 @@ export default function App() {
         {!loaded&&<Loader onDone={()=>setLoaded(true)} />}
         {page!=="auth"&&<Nav page={page} setPage={setPage} user={user} isAdmin={isAdmin} />}
         <main style={{paddingTop:page==="auth"?0:56,paddingBottom:66}}>
-          {showHeader&&(
-            <div style={{textAlign:"center",padding:"34px 0 26px"}}>
-              <h1 style={{fontFamily:T.font,fontSize:12,fontWeight:700,letterSpacing:6,color:T.white,textTransform:"uppercase",marginBottom:7}}>{pageMap[page]}</h1>
-              <div style={{width:18,height:1,background:T.gold,margin:"0 auto"}} />
+          {authLoading ? (
+            <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"60vh"}}>
+              <span style={{fontSize:28,color:T.gold,animation:"spin 1s linear infinite"}}>◌</span>
             </div>
+          ) : (
+            <>
+              {showHeader&&(
+                <div style={{textAlign:"center",padding:"34px 0 26px"}}>
+                  <h1 style={{fontFamily:T.font,fontSize:12,fontWeight:700,letterSpacing:6,color:T.white,textTransform:"uppercase",marginBottom:7}}>{pageMap[page]}</h1>
+                  <div style={{width:18,height:1,background:T.gold,margin:"0 auto"}} />
+                </div>
+              )}
+              <Suspense fallback={<Spin />}>
+                {page==="feed"    &&<SocialFeedPage user={user} collections={collections} onSelectNFT={handleSelectNFT} posts={enrichedPosts} onPost={handlePost} onLike={handleLike} />}
+                {page==="explore" &&<ExplorePage collections={collections} onSelectNFT={handleSelectNFT} user={user} />}
+                {page==="creators"&&<CreatorsPage collections={collections} onSelectNFT={handleSelectNFT} />}
+                {page==="wallet"  &&<WalletPage user={user} collections={collections} onSelectNFT={handleSelectNFT} />}
+                {page==="profile" &&<ProfilePage user={user} onUpdateUser={handleUpdateUser} onGoToFeed={()=>setPage("feed")} onLogout={handleLogout} />}
+                {page==="auth"    &&<AuthPage onGoogleLogin={handleGoogleLogin} onAdminAuth={handleAdminAuth} />}
+                {page==="admin"   &&isAdmin&&<AdminPanel collections={collections} setCollections={setCollections} posts={enrichedPosts} verifiedUsers={verifiedUsers} {...modProps} />}
+                {page==="admin"   &&!isAdmin&&<div style={{textAlign:"center",padding:80,fontFamily:T.font,color:T.muted}}>Access denied.</div>}
+              </Suspense>
+            </>
           )}
-          <Suspense fallback={<Spin />}>
-            {page==="feed"    &&<SocialFeedPage user={user} collections={collections} onSelectNFT={handleSelectNFT} posts={enrichedPosts} onPost={handlePost} onLike={handleLike} />}
-            {page==="explore" &&<ExplorePage collections={collections} onSelectNFT={handleSelectNFT} user={user} />}
-            {page==="creators"&&<CreatorsPage collections={collections} onSelectNFT={handleSelectNFT} />}
-            {page==="wallet"  &&<WalletPage user={user} collections={collections} onSelectNFT={handleSelectNFT} />}
-            {page==="profile" &&<ProfilePage user={user} onUpdateUser={handleUpdateUser} onGoToFeed={()=>setPage("feed")} onLogout={handleLogout} />}
-            {page==="auth"    &&<AuthPage onAuth={handleAuth} onAdminAuth={handleAdminAuth} />}
-            {page==="admin"   &&isAdmin&&<AdminPanel collections={collections} setCollections={setCollections} posts={enrichedPosts} verifiedUsers={verifiedUsers} {...modProps} />}
-            {page==="admin"   &&!isAdmin&&<div style={{textAlign:"center",padding:80,fontFamily:T.font,color:T.muted}}>Access denied.</div>}
-          </Suspense>
         </main>
         <NFTModal nft={selectedNFT} collection={selectedColl} onClose={()=>{setSelectedNFT(null);setSelectedColl(null);}} user={user} onBuy={handleBuy} />
         {page!=="auth"&&(
