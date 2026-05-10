@@ -6,8 +6,8 @@ import {
 } from "firebase/auth";
 import {
   getFirestore, collection, doc,
-  addDoc, setDoc, getDoc, updateDoc, deleteDoc,
-  onSnapshot, query, orderBy, serverTimestamp,
+  addDoc, setDoc, getDoc, getDocs, updateDoc, deleteDoc,
+  onSnapshot, query, orderBy, limit, serverTimestamp,
   increment, arrayUnion, arrayRemove
 } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -27,14 +27,22 @@ export const auth    = getAuth(app);
 export const db      = getFirestore(app);
 export const storage = getStorage(app);
 
-// ── Auth — redirect on mobile, popup on desktop ───────────────────────────────
+// ── Auth — popup first, redirect fallback for mobile Safari ──────────────────
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: "select_account" });
-const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-export const signInWithGoogle  = () => isMobile
-  ? signInWithRedirect(auth, provider)
-  : signInWithPopup(auth, provider);
+export const signInWithGoogle = async () => {
+  try {
+    // Try popup first — works on desktop and most mobile browsers
+    return await signInWithPopup(auth, provider);
+  } catch(e) {
+    // If popup blocked (common on iOS Safari) — use redirect
+    if (e.code === "auth/popup-blocked" || e.code === "auth/popup-closed-by-user" || e.code === "auth/cancelled-popup-request") {
+      return signInWithRedirect(auth, provider);
+    }
+    throw e;
+  }
+};
 export const getGoogleRedirect = () => getRedirectResult(auth);
 export const listenAuth        = (cb) => onAuthStateChanged(auth, cb);
 export const logOut            = () => signOut(auth);
@@ -92,9 +100,15 @@ export const createPost = (data) =>
 
 export const subscribeToPosts = (cb) =>
   onSnapshot(
-    query(collection(db, "posts"), orderBy("createdAt", "desc")),
+    query(collection(db, "posts"), orderBy("createdAt", "desc"), limit(100)),
     snap => cb(snap.docs.map(d => ({ id: d.id, ...d.data() })))
   );
+
+// One-shot fetch for polling fallback
+export const fetchPostsOnce = async () => {
+  const snap = await getDocs(query(collection(db, "posts"), orderBy("createdAt", "desc"), limit(100)));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+};
 
 export const likePost = async (postId, uid) => {
   const ref  = doc(db, "posts", postId);

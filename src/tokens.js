@@ -61,7 +61,21 @@ export const GLOBAL_CSS = `
   .btn-base {transition:all 0.2s ${T.smooth};will-change:transform}
   .bell-ring{animation:bellRing 0.5s ease}
 
-  @media(max-width:640px){.hide-sm{display:none!important}}
+  @media(max-width:640px){
+    .hide-sm{display:none!important}
+  }
+  @media(max-width:380px){
+    .hide-xs{display:none!important}
+  }
+  @media(min-width:641px){
+    .show-md{display:block!important}
+  }
+  /* Prevent font inflation on iOS */
+  html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+  /* Better touch targets */
+  button{min-height:36px;-webkit-tap-highlight-color:transparent}
+  /* Prevent horizontal scroll */
+  body{overflow-x:hidden;max-width:100vw}
   :focus-visible{outline:2px solid ${T.gold};outline-offset:3px;border-radius:3px}
   :focus:not(:focus-visible){outline:none}
 `;
