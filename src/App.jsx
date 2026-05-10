@@ -840,6 +840,34 @@ export default function App() {
   }, []);
 
   // ── Handlers ─────────────────────────────────────────────────────────────
+
+  // ── Web Push Notifications ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (!user || !("Notification" in window)) return;
+    // Request permission after user logs in
+    if (Notification.permission === "default") {
+      setTimeout(() => {
+        Notification.requestPermission().then(perm => {
+          if (perm === "granted") showToast("🔔 Push notifications enabled");
+        });
+      }, 3000); // Wait 3s after login before asking
+    }
+  }, [user, showToast]);
+
+  // Helper to fire a browser push notification
+  const pushNotif = useCallback((title, body, icon="◈") => {
+    if (Notification.permission === "granted") {
+      try {
+        new Notification(title, {
+          body,
+          icon: "/favicon.ico",
+          badge: "/favicon.ico",
+          tag: "paradise-notif",
+        });
+      } catch(e) {}
+    }
+  }, []);
+
   const handleGoogleLogin = useCallback(async () => {
     try { await signInWithGoogle(); }
     catch(e) {
@@ -872,10 +900,10 @@ export default function App() {
   // ── Like fix: uses real Firestore likes count ─────────────────────────────
   const handleLike = useCallback(async id => {
     if (!user) { navigate("auth"); return; }
-    // Optimistic update immediately
+    // Optimistic update immediately - no delay
     setPosts(prev => prev.map(p => {
       if (p.id !== id) return p;
-      const alreadyLiked = p.likedBy?.includes(user.uid);
+      const alreadyLiked = !!(p.likedBy?.includes(user.uid));
       return {
         ...p,
         likedByMe: !alreadyLiked,
@@ -885,7 +913,7 @@ export default function App() {
           : [...(p.likedBy||[]), user.uid],
       };
     }));
-    // Then sync with Firestore
+    // Sync to Firestore (silently)
     try { await likePost(id, user.uid); } catch(e) {}
   }, [user, navigate]);
 
@@ -977,7 +1005,7 @@ export default function App() {
               )}
               <PageTransition pageKey={page}>
                 <Suspense fallback={<Spin />}>
-                  {page==="feed"     && <SocialFeedPage user={user} collections={collections} onSelectNFT={handleSelectNFT} posts={enrichedPosts} onPost={handlePost} onLike={handleLike} />}
+                  {page==="feed"     && <SocialFeedPage user={user} collections={collections} onSelectNFT={handleSelectNFT} posts={enrichedPosts} onPost={handlePost} onLike={handleLike} onRefresh={async()=>{try{const live=await fetchPostsOnce();setPosts(live);setLastRefresh(Date.now());}catch(e){}}} isAdmin={isAdmin} onPin={handlePin} onBlockPost={handleBlockPost} onDeletePost={handleDeletePost} />}
                   {page==="explore"  && <ExplorePage collections={collections} onSelectNFT={handleSelectNFT} user={user} />}
                   {page==="creators" && <CreatorsPage collections={collections} onSelectNFT={handleSelectNFT} />}
                   {page==="wallet"   && <WalletPage user={user} collections={collections} onSelectNFT={handleSelectNFT} setPage={navigate} />}
