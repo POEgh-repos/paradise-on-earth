@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from "firebase/auth";
-import { getFirestore, collection, doc, addDoc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp } from "firebase/firestore";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut } from "firebase/auth";
+import { getFirestore, collection, doc, addDoc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 const firebaseConfig = {
@@ -17,11 +17,21 @@ export const auth    = getAuth(app);
 export const db      = getFirestore(app);
 export const storage = getStorage(app);
 
-// ── Auth ──────────────────────────────────────────────────────────────────────
+// ── Auth — uses redirect on mobile, popup on desktop ─────────────────────────
 const googleProvider = new GoogleAuthProvider();
 
-export const signInWithGoogle = () => signInWithPopup(auth, googleProvider);
-export const logOut           = () => signOut(auth);
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+export const signInWithGoogle = async () => {
+  if (isMobile) {
+    await signInWithRedirect(auth, googleProvider);
+  } else {
+    return signInWithPopup(auth, googleProvider);
+  }
+};
+
+export { getRedirectResult };
+export const logOut = () => signOut(auth);
 
 // ── User profiles ─────────────────────────────────────────────────────────────
 export const createUserProfile = async (uid, data) => {

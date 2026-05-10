@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, Suspense, lazy } from "react";
 import { T, GLOBAL_CSS, Btn, Divider, Tag, VerifiedCrown, FlagBadge, Toast, AnimatedAvatar } from "./tokens";
 import GalaxyBackground from "./GalaxyBackground";
 import { auth, signInWithGoogle, logOut, createUserProfile, getUserProfile, createPost, subscribeToPosts, likePost, pinPost, blockPost, deletePost as fbDeletePost, subscribeToCollections, saveCollection } from "./firebase";
+import { getRedirectResult } from "firebase/auth";
 import { onAuthStateChanged } from "firebase/auth";
 
 const ProfilePage    = lazy(() => import("./ProfilePage"));
@@ -375,6 +376,19 @@ export default function App() {
 
   // ── Firebase auth listener ──────────────────────────────────────────────────
   useEffect(()=>{
+    // Handle redirect result from mobile Google login
+    getRedirectResult(auth).then(async result => {
+      if (result?.user) {
+        const fbUser = result.user;
+        await createUserProfile(fbUser.uid, {
+          name: fbUser.displayName,
+          email: fbUser.email,
+          avatar: fbUser.photoURL || "◆",
+          provider: "google",
+        });
+      }
+    }).catch(()=>{});
+
     const unsub = onAuthStateChanged(auth, async (fbUser)=>{
       if(fbUser){
         const profile = await createUserProfile(fbUser.uid, {
